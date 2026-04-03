@@ -48,35 +48,64 @@ if ! command -v ccstatusline &>/dev/null; then
     error "ccstatusline not found in PATH after install. Check your PATH."
 fi
 
-# --- 3. Install Nerd Font (JetBrainsMono) if missing ---
+# --- 3. Font selection ---
+echo ""
+echo -e "${CYAN}Select a Nerd Font to install (required for status line icons):${NC}"
+echo "  1) JetBrainsMono  — compact, sharp (default)"
+echo "  2) CascadiaCode   — open, airy, easy on the eyes"
+echo "  3) FiraCode       — clean with ligatures"
+echo "  4) Hack           — simple, high contrast"
+echo "  5) Iosevka        — tall, spacious, very readable"
+echo ""
+read -rp "Enter choice [1-5] (default: 1): " FONT_CHOICE
+FONT_CHOICE="${FONT_CHOICE:-1}"
+
+case "$FONT_CHOICE" in
+    1) FONT_ARCHIVE="JetBrainsMono"
+       FONT_FC_PATTERN="JetBrainsMono.*Nerd"
+       FONT_GSETTINGS="JetBrainsMono Nerd Font Mono 13" ;;
+    2) FONT_ARCHIVE="CascadiaCode"
+       FONT_FC_PATTERN="CaskaydiaCove.*Nerd"
+       FONT_GSETTINGS="CaskaydiaCove Nerd Font Mono 13" ;;
+    3) FONT_ARCHIVE="FiraCode"
+       FONT_FC_PATTERN="FiraCode.*Nerd"
+       FONT_GSETTINGS="FiraCode Nerd Font Mono 13" ;;
+    4) FONT_ARCHIVE="Hack"
+       FONT_FC_PATTERN="Hack.*Nerd"
+       FONT_GSETTINGS="Hack Nerd Font Mono 13" ;;
+    5) FONT_ARCHIVE="Iosevka"
+       FONT_FC_PATTERN="Iosevka.*Nerd"
+       FONT_GSETTINGS="Iosevka Nerd Font Mono 13" ;;
+    *) warn "Invalid choice, defaulting to JetBrainsMono."
+       FONT_ARCHIVE="JetBrainsMono"
+       FONT_FC_PATTERN="JetBrainsMono.*Nerd"
+       FONT_GSETTINGS="JetBrainsMono Nerd Font Mono 13" ;;
+esac
+
 FONT_DIR="$HOME/.local/share/fonts"
-if fc-list | grep -qi "JetBrainsMono.*Nerd"; then
-    info "JetBrainsMono Nerd Font already installed."
+if fc-list | grep -qi "$FONT_FC_PATTERN"; then
+    info "${FONT_ARCHIVE} Nerd Font already installed."
 else
-    info "Installing JetBrainsMono Nerd Font..."
+    info "Installing ${FONT_ARCHIVE} Nerd Font..."
     mkdir -p "$FONT_DIR"
-    NERD_FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz"
+    NERD_FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/${FONT_ARCHIVE}.tar.xz"
     TMP_DIR=$(mktemp -d)
-    curl -fsSL "$NERD_FONT_URL" -o "$TMP_DIR/JetBrainsMono.tar.xz"
-    tar -xf "$TMP_DIR/JetBrainsMono.tar.xz" -C "$FONT_DIR"
+    curl -fsSL "$NERD_FONT_URL" -o "$TMP_DIR/${FONT_ARCHIVE}.tar.xz"
+    tar -xf "$TMP_DIR/${FONT_ARCHIVE}.tar.xz" -C "$FONT_DIR"
     rm -rf "$TMP_DIR"
     fc-cache -f "$FONT_DIR"
-    info "JetBrainsMono Nerd Font installed."
+    info "${FONT_ARCHIVE} Nerd Font installed."
 fi
 
 # --- 4. Set terminal font (GNOME Terminal) ---
 if command -v gsettings &>/dev/null; then
     CURRENT_FONT=$(gsettings get org.gnome.desktop.interface monospace-font-name 2>/dev/null || echo "")
-    if echo "$CURRENT_FONT" | grep -qi "nerd"; then
-        info "Terminal font already set to a Nerd Font: $CURRENT_FONT"
-    else
-        info "Setting terminal monospace font to JetBrainsMono Nerd Font Mono 13..."
-        gsettings set org.gnome.desktop.interface monospace-font-name 'JetBrainsMono Nerd Font Mono 13'
-        info "Font set. Previous font was: $CURRENT_FONT"
-        warn "To revert: gsettings set org.gnome.desktop.interface monospace-font-name $CURRENT_FONT"
-    fi
+    info "Setting terminal monospace font to ${FONT_GSETTINGS}..."
+    gsettings set org.gnome.desktop.interface monospace-font-name "$FONT_GSETTINGS"
+    info "Font set. Previous font was: $CURRENT_FONT"
+    warn "To revert: gsettings set org.gnome.desktop.interface monospace-font-name $CURRENT_FONT"
 else
-    warn "gsettings not found. Set your terminal font to 'JetBrainsMono Nerd Font Mono' manually."
+    warn "gsettings not found. Set your terminal font to '${FONT_GSETTINGS}' manually."
 fi
 
 # --- 5. Write ccstatusline config ---
