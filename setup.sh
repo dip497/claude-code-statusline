@@ -1,0 +1,347 @@
+#!/usr/bin/env bash
+#
+# Claude Code Status Line - Complete Setup Script
+# Uses: ccstatusline (https://github.com/sirmalloc/ccstatusline)
+#
+# 3-Line Layout:
+#   Line 1: Model | Version | Style | Vim Mode | Cost | Session Usage | Weekly Usage
+#   Line 2: Git Branch | Changes | Insertions | Deletions | Worktree | CWD | Git Root
+#   Line 3: Tokens In | Tokens Out | Cached | Context Length | Context % | Session Clock | Block Timer | Memory
+#
+# Usage: bash claude_code_status_line.sh
+#
+
+set -euo pipefail
+
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
+warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+
+# --- 1. Check prerequisites ---
+info "Checking prerequisites..."
+
+if command -v bun &>/dev/null; then
+    PKG_MGR="bun"
+    INSTALL_CMD="bun install -g ccstatusline@latest"
+elif command -v npm &>/dev/null; then
+    PKG_MGR="npm"
+    INSTALL_CMD="npm install -g ccstatusline@latest"
+else
+    error "Neither bun nor npm found. Install one first."
+fi
+
+info "Using package manager: ${CYAN}${PKG_MGR}${NC}"
+
+# --- 2. Install ccstatusline globally ---
+info "Installing ccstatusline globally..."
+$INSTALL_CMD 2>&1 | tail -3
+info "ccstatusline installed."
+
+# Verify installation
+if ! command -v ccstatusline &>/dev/null; then
+    error "ccstatusline not found in PATH after install. Check your PATH."
+fi
+
+# --- 3. Install Nerd Font (JetBrainsMono) if missing ---
+FONT_DIR="$HOME/.local/share/fonts"
+if fc-list | grep -qi "JetBrainsMono.*Nerd"; then
+    info "JetBrainsMono Nerd Font already installed."
+else
+    info "Installing JetBrainsMono Nerd Font..."
+    mkdir -p "$FONT_DIR"
+    NERD_FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz"
+    TMP_DIR=$(mktemp -d)
+    curl -fsSL "$NERD_FONT_URL" -o "$TMP_DIR/JetBrainsMono.tar.xz"
+    tar -xf "$TMP_DIR/JetBrainsMono.tar.xz" -C "$FONT_DIR"
+    rm -rf "$TMP_DIR"
+    fc-cache -f "$FONT_DIR"
+    info "JetBrainsMono Nerd Font installed."
+fi
+
+# --- 4. Set terminal font (GNOME Terminal) ---
+if command -v gsettings &>/dev/null; then
+    CURRENT_FONT=$(gsettings get org.gnome.desktop.interface monospace-font-name 2>/dev/null || echo "")
+    if echo "$CURRENT_FONT" | grep -qi "nerd"; then
+        info "Terminal font already set to a Nerd Font: $CURRENT_FONT"
+    else
+        info "Setting terminal monospace font to JetBrainsMono Nerd Font Mono 13..."
+        gsettings set org.gnome.desktop.interface monospace-font-name 'JetBrainsMono Nerd Font Mono 13'
+        info "Font set. Previous font was: $CURRENT_FONT"
+        warn "To revert: gsettings set org.gnome.desktop.interface monospace-font-name $CURRENT_FONT"
+    fi
+else
+    warn "gsettings not found. Set your terminal font to 'JetBrainsMono Nerd Font Mono' manually."
+fi
+
+# --- 5. Write ccstatusline config ---
+info "Writing ccstatusline configuration..."
+CCSTATUS_DIR="$HOME/.config/ccstatusline"
+mkdir -p "$CCSTATUS_DIR"
+
+cat > "$CCSTATUS_DIR/settings.json" << 'CCEOF'
+{
+  "version": 3,
+  "lines": [
+    [
+      {
+        "id": "1",
+        "type": "model",
+        "color": "cyan"
+      },
+      {
+        "id": "2",
+        "type": "separator"
+      },
+      {
+        "id": "3",
+        "type": "version",
+        "color": "brightBlack"
+      },
+      {
+        "id": "4",
+        "type": "separator"
+      },
+      {
+        "id": "5",
+        "type": "output-style",
+        "color": "green"
+      },
+      {
+        "id": "6",
+        "type": "separator"
+      },
+      {
+        "id": "7",
+        "type": "vim-mode",
+        "color": "yellow"
+      },
+      {
+        "id": "9",
+        "type": "session-cost",
+        "color": "red"
+      },
+      {
+        "id": "10",
+        "type": "separator"
+      },
+      {
+        "id": "11",
+        "type": "session-usage",
+        "color": "yellow"
+      },
+      {
+        "id": "12",
+        "type": "separator"
+      },
+      {
+        "id": "13",
+        "type": "weekly-usage",
+        "color": "brightBlack"
+      }
+    ],
+    [
+      {
+        "id": "14",
+        "type": "git-branch",
+        "color": "magenta"
+      },
+      {
+        "id": "15",
+        "type": "separator"
+      },
+      {
+        "id": "16",
+        "type": "git-changes",
+        "color": "yellow"
+      },
+      {
+        "id": "17",
+        "type": "separator"
+      },
+      {
+        "id": "18",
+        "type": "git-insertions",
+        "color": "green"
+      },
+      {
+        "id": "19",
+        "type": "separator"
+      },
+      {
+        "id": "20",
+        "type": "git-deletions",
+        "color": "red"
+      },
+      {
+        "id": "21",
+        "type": "separator"
+      },
+      {
+        "id": "22",
+        "type": "git-worktree",
+        "color": "blue"
+      },
+      {
+        "id": "24",
+        "type": "cwd",
+        "color": "blue"
+      },
+      {
+        "id": "25",
+        "type": "separator"
+      },
+      {
+        "id": "26",
+        "type": "git-root-dir",
+        "color": "brightBlack"
+      }
+    ],
+    [
+      {
+        "id": "27",
+        "type": "tokens-input",
+        "color": "green"
+      },
+      {
+        "id": "28",
+        "type": "separator"
+      },
+      {
+        "id": "29",
+        "type": "tokens-output",
+        "color": "cyan"
+      },
+      {
+        "id": "30",
+        "type": "separator"
+      },
+      {
+        "id": "31",
+        "type": "tokens-cached",
+        "color": "yellow"
+      },
+      {
+        "id": "32",
+        "type": "separator"
+      },
+      {
+        "id": "33",
+        "type": "context-length",
+        "color": "brightBlack"
+      },
+      {
+        "id": "50",
+        "type": "separator"
+      },
+      {
+        "id": "51",
+        "type": "context-percentage",
+        "color": "white"
+      },
+      {
+        "id": "34",
+        "type": "separator"
+      },
+      {
+        "id": "37",
+        "type": "session-clock",
+        "color": "blue"
+      },
+      {
+        "id": "38",
+        "type": "separator"
+      },
+      {
+        "id": "39",
+        "type": "block-timer",
+        "color": "magenta"
+      },
+      {
+        "id": "40",
+        "type": "separator"
+      },
+      {
+        "id": "41",
+        "type": "memory-usage",
+        "color": "brightBlack"
+      }
+    ]
+  ],
+  "flexMode": "full-minus-40",
+  "compactThreshold": 60,
+  "colorLevel": 3,
+  "inheritSeparatorColors": false,
+  "globalBold": false,
+  "powerline": {
+    "enabled": false,
+    "separators": [
+      "|"
+    ],
+    "separatorInvertBackground": [
+      false
+    ],
+    "startCaps": [],
+    "endCaps": [],
+    "autoAlign": false
+  }
+}
+CCEOF
+
+info "ccstatusline config written to $CCSTATUS_DIR/settings.json"
+
+# --- 6. Update Claude Code settings.json ---
+info "Updating Claude Code settings..."
+CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+
+if [ -f "$CLAUDE_SETTINGS" ]; then
+    # Use python3 to safely merge statusLine into existing settings
+    python3 -c "
+import json
+
+with open('$CLAUDE_SETTINGS') as f:
+    settings = json.load(f)
+
+settings['statusLine'] = {
+    'type': 'command',
+    'command': 'ccstatusline',
+    'padding': 0
+}
+
+with open('$CLAUDE_SETTINGS', 'w') as f:
+    json.dump(settings, f, indent=2)
+"
+    info "Updated existing $CLAUDE_SETTINGS"
+else
+    mkdir -p "$HOME/.claude"
+    cat > "$CLAUDE_SETTINGS" << 'CLEOF'
+{
+  "statusLine": {
+    "type": "command",
+    "command": "ccstatusline",
+    "padding": 0
+  }
+}
+CLEOF
+    info "Created $CLAUDE_SETTINGS"
+fi
+
+# --- Done ---
+echo ""
+echo -e "${GREEN}============================================${NC}"
+echo -e "${GREEN}  ccstatusline setup complete!${NC}"
+echo -e "${GREEN}============================================${NC}"
+echo ""
+echo -e "  ${CYAN}Line 1:${NC} Model | Version | Style | Vim | Cost | Session% | Weekly%"
+echo -e "  ${CYAN}Line 2:${NC} Branch | Changes | +Lines | -Lines | Worktree | CWD | Root"
+echo -e "  ${CYAN}Line 3:${NC} In Tokens | Out | Cached | Context | Context% | Clock | Block | Mem"
+echo ""
+echo -e "  ${YELLOW}Restart Claude Code to see the new status line.${NC}"
+echo -e "  ${YELLOW}To customize: run 'ccstatusline' interactively.${NC}"
+echo -e "  ${YELLOW}Config: ~/.config/ccstatusline/settings.json${NC}"
+echo ""
