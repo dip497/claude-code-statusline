@@ -8,7 +8,9 @@
 #   Line 2: Git Branch | Changes | Insertions | Deletions | Worktree | CWD | Git Root
 #   Line 3: Tokens In | Tokens Out | Cached | Context Length | Context % | Session Clock | Block Timer | Memory
 #
-# Usage: bash claude_code_status_line.sh
+# Usage:
+#   bash setup.sh               — full install
+#   bash setup.sh --change-font — change terminal font only
 #
 
 set -euo pipefail
@@ -22,6 +24,58 @@ NC='\033[0m'
 info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+
+# --- Handle --change-font flag ---
+if [[ "${1:-}" == "--change-font" ]]; then
+    select_and_apply_font() {
+        echo ""
+        echo -e "${CYAN}Select a Nerd Font:${NC}"
+        echo "  1) JetBrainsMono  — compact, sharp (default)"
+        echo "  2) CascadiaCode   — open, airy, easy on the eyes"
+        echo "  3) FiraCode       — clean with ligatures"
+        echo "  4) Hack           — simple, high contrast"
+        echo "  5) Iosevka        — tall, spacious, very readable"
+        echo ""
+        read -rp "Enter choice [1-5] (default: 1): " FONT_CHOICE
+        FONT_CHOICE="${FONT_CHOICE:-1}"
+
+        case "$FONT_CHOICE" in
+            1) FONT_ARCHIVE="JetBrainsMono"; FONT_FC_PATTERN="JetBrainsMono.*Nerd"; FONT_GSETTINGS="JetBrainsMono Nerd Font Mono 13" ;;
+            2) FONT_ARCHIVE="CascadiaCode";  FONT_FC_PATTERN="CaskaydiaCove.*Nerd";  FONT_GSETTINGS="CaskaydiaCove Nerd Font Mono 13" ;;
+            3) FONT_ARCHIVE="FiraCode";      FONT_FC_PATTERN="FiraCode.*Nerd";       FONT_GSETTINGS="FiraCode Nerd Font Mono 13" ;;
+            4) FONT_ARCHIVE="Hack";          FONT_FC_PATTERN="Hack.*Nerd";           FONT_GSETTINGS="Hack Nerd Font Mono 13" ;;
+            5) FONT_ARCHIVE="Iosevka";       FONT_FC_PATTERN="Iosevka.*Nerd";        FONT_GSETTINGS="Iosevka Nerd Font Mono 13" ;;
+            *) warn "Invalid choice, defaulting to JetBrainsMono."
+               FONT_ARCHIVE="JetBrainsMono"; FONT_FC_PATTERN="JetBrainsMono.*Nerd"; FONT_GSETTINGS="JetBrainsMono Nerd Font Mono 13" ;;
+        esac
+
+        FONT_DIR="$HOME/.local/share/fonts"
+        if fc-list | grep -qi "$FONT_FC_PATTERN"; then
+            info "${FONT_ARCHIVE} Nerd Font already installed."
+        else
+            info "Installing ${FONT_ARCHIVE} Nerd Font..."
+            mkdir -p "$FONT_DIR"
+            TMP_DIR=$(mktemp -d)
+            curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/${FONT_ARCHIVE}.tar.xz" -o "$TMP_DIR/${FONT_ARCHIVE}.tar.xz"
+            tar -xf "$TMP_DIR/${FONT_ARCHIVE}.tar.xz" -C "$FONT_DIR"
+            rm -rf "$TMP_DIR"
+            fc-cache -f "$FONT_DIR"
+            info "${FONT_ARCHIVE} Nerd Font installed."
+        fi
+
+        if command -v gsettings &>/dev/null; then
+            CURRENT_FONT=$(gsettings get org.gnome.desktop.interface monospace-font-name 2>/dev/null || echo "")
+            gsettings set org.gnome.desktop.interface monospace-font-name "$FONT_GSETTINGS"
+            info "Font changed to: ${FONT_GSETTINGS}"
+            info "Previous font was: $CURRENT_FONT"
+            warn "To revert: gsettings set org.gnome.desktop.interface monospace-font-name $CURRENT_FONT"
+        else
+            warn "gsettings not found. Set your terminal font to '${FONT_GSETTINGS}' manually."
+        fi
+    }
+    select_and_apply_font
+    exit 0
+fi
 
 # --- 1. Check prerequisites ---
 info "Checking prerequisites..."

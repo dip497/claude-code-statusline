@@ -46,6 +46,16 @@ ccstatusline
 
 Config file: `~/.config/ccstatusline/settings.json`
 
+## Change Font Anytime
+
+To switch fonts without re-running the full setup:
+
+```bash
+bash setup.sh --change-font
+```
+
+Choose from 5 Nerd Fonts: JetBrainsMono, CascadiaCode, FiraCode, Hack, or Iosevka.
+
 ## Revert Terminal Font
 
 ```bash
