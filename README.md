@@ -2,7 +2,8 @@
 
 One-command setup for a beautiful 3-line status line in [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code), powered by [ccstatusline](https://github.com/sirmalloc/ccstatusline).
 
-![Status Line Preview](preview.png)
+<img width="1847" height="94" alt="image" src="https://github.com/user-attachments/assets/e29ebfd5-734f-4d53-8d8b-3a30f37dc15c" />
+
 
 ## Quick Install
 
