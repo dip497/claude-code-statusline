@@ -102,6 +102,17 @@ if ! command -v ccstatusline &>/dev/null; then
     error "ccstatusline not found in PATH after install. Check your PATH."
 fi
 
+# --- Install cc-config command ---
+info "Installing cc-config command..."
+CC_BIN_DIR="$HOME/.local/bin"
+mkdir -p "$CC_BIN_DIR"
+cp "$(dirname "$0")/cc-config.js" "$CC_BIN_DIR/cc-config"
+chmod +x "$CC_BIN_DIR/cc-config"
+if ! echo "$PATH" | grep -q "$CC_BIN_DIR"; then
+    warn "Add ~/.local/bin to your PATH: export PATH=\"\$HOME/.local/bin:\$PATH\""
+fi
+info "cc-config installed."
+
 # --- 3. Font selection ---
 echo ""
 echo -e "${CYAN}Select a Nerd Font to install (required for status line icons):${NC}"
@@ -426,5 +437,6 @@ echo -e "  ${CYAN}Line 3:${NC} In Tokens | Out | Cached | Context | Context% | C
 echo ""
 echo -e "  ${YELLOW}Restart Claude Code to see the new status line.${NC}"
 echo -e "  ${YELLOW}To customize: run 'ccstatusline' interactively.${NC}"
+echo -e "  ${YELLOW}To configure:    cc-config${NC}"
 echo -e "  ${YELLOW}Config: ~/.config/ccstatusline/settings.json${NC}"
 echo ""

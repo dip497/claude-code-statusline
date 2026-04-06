@@ -4,7 +4,6 @@ One-command setup for a beautiful 3-line status line in [Claude Code CLI](https:
 
 <img width="1847" height="94" alt="image" src="https://github.com/user-attachments/assets/e29ebfd5-734f-4d53-8d8b-3a30f37dc15c" />
 
-
 ## Quick Install
 
 ```bash
@@ -15,19 +14,20 @@ curl -fsSL https://raw.githubusercontent.com/dip497/claude-code-statusline/main/
 
 A fully configured 3-line status line with 15+ widgets:
 
-| Line | Widgets |
-|------|---------|
-| **Line 1** | Model, Version, Output Style, Vim Mode, Session Cost, Session Usage, Weekly Usage |
-| **Line 2** | Git Branch, Changes, Insertions, Deletions, Worktree, CWD, Git Root Dir |
+| Line       | Widgets                                                                                      |
+| ---------- | -------------------------------------------------------------------------------------------- |
+| **Line 1** | Model, Version, Output Style, Vim Mode, Session Cost, Session Usage, Weekly Usage            |
+| **Line 2** | Git Branch, Changes, Insertions, Deletions, Worktree, CWD, Git Root Dir                      |
 | **Line 3** | Tokens In, Tokens Out, Cached, Context Length, Context %, Session Clock, Block Timer, Memory |
 
 ## What the Script Does
 
 1. Installs `ccstatusline` globally (via `bun` or `npm`)
-2. Downloads & installs **JetBrainsMono Nerd Font** (if missing)
-3. Sets GNOME Terminal font to the Nerd Font
-4. Writes the full 3-line config to `~/.config/ccstatusline/settings.json`
-5. Updates Claude Code `~/.claude/settings.json` with the status line command
+2. Installs `cc-config` — a runtime config tool for fonts, colors, and lines
+3. Downloads & installs your chosen Nerd Font (if missing)
+4. Sets GNOME Terminal font automatically
+5. Writes the full 3-line config to `~/.config/ccstatusline/settings.json`
+6. Updates Claude Code `~/.claude/settings.json` with the status line command
 
 ## Requirements
 
@@ -36,25 +36,33 @@ A fully configured 3-line status line with 15+ widgets:
 - **python3** (for safely updating settings.json)
 - **GNOME Terminal** (for auto font setup; other terminals need manual font change)
 
-## Customization
+## Runtime Configuration
 
-After install, run the interactive TUI to tweak widgets, colors, and layout:
-
-```bash
-ccstatusline
-```
-
-Config file: `~/.config/ccstatusline/settings.json`
-
-## Change Font Anytime
-
-To switch fonts without re-running the full setup:
+After install, use `cc-config` to change fonts or configure the status line:
 
 ```bash
-bash setup.sh --change-font
+cc-config
 ```
 
-Choose from 5 Nerd Fonts: JetBrainsMono, CascadiaCode, FiraCode, Hack, or Iosevka.
+```
+  Claude Code Status Line — Config
+
+  1) Change Font
+  2) Edit Colors & Lines
+```
+
+- **Change Font** — pick from 5 Nerd Fonts, applied immediately without restarting the terminal
+- **Edit Colors & Lines** — opens the full ccstatusline interactive TUI to tweak widgets, colors, and layout
+
+### Available Fonts
+
+| #   | Font          | Style                         |
+| --- | ------------- | ----------------------------- |
+| 1   | JetBrainsMono | Compact, sharp (default)      |
+| 2   | CascadiaCode  | Open, airy, easy on the eyes  |
+| 3   | FiraCode      | Clean with ligatures          |
+| 4   | Hack          | Simple, high contrast         |
+| 5   | Iosevka       | Tall, spacious, very readable |
 
 ## Revert Terminal Font
 
@@ -68,10 +76,13 @@ gsettings set org.gnome.desktop.interface monospace-font-name 'Ubuntu Sans Mono 
 # Remove ccstatusline
 npm uninstall -g ccstatusline  # or: bun remove -g ccstatusline
 
+# Remove cc-config
+rm ~/.local/bin/cc-config
+
 # Remove config
 rm -rf ~/.config/ccstatusline
 
-# Remove statusLine from Claude Code settings (edit manually)
+# Remove statusLine from Claude Code settings
 # ~/.claude/settings.json -> delete the "statusLine" block
 ```
 
