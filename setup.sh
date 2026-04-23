@@ -169,16 +169,10 @@ else
     info "${FONT_ARCHIVE} Nerd Font installed."
 fi
 
-# --- 4. Set terminal font (GNOME Terminal) ---
-if command -v gsettings &>/dev/null; then
-    CURRENT_FONT=$(gsettings get org.gnome.desktop.interface monospace-font-name 2>/dev/null || echo "")
-    info "Setting terminal monospace font to ${FONT_GSETTINGS}..."
-    gsettings set org.gnome.desktop.interface monospace-font-name "$FONT_GSETTINGS"
-    info "Font set. Previous font was: $CURRENT_FONT"
-    warn "To revert: gsettings set org.gnome.desktop.interface monospace-font-name $CURRENT_FONT"
-else
-    warn "gsettings not found. Set your terminal font to '${FONT_GSETTINGS}' manually."
-fi
+# --- 4. Font install only — do NOT change system font ---
+info "Nerd Font installed. System monospace font left unchanged."
+warn "To use icons, set your terminal font manually to '${FONT_GSETTINGS}'."
+warn "Or run: gsettings set org.gnome.desktop.interface monospace-font-name '${FONT_GSETTINGS}'"
 
 # --- 5. Write ccstatusline config ---
 info "Writing ccstatusline configuration..."
