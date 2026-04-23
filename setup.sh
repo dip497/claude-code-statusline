@@ -106,7 +106,14 @@ fi
 info "Installing cc-config command..."
 CC_BIN_DIR="$HOME/.local/bin"
 mkdir -p "$CC_BIN_DIR"
-cp "$(dirname "$0")/cc-config.js" "$CC_BIN_DIR/cc-config"
+REPO_RAW="https://raw.githubusercontent.com/dip497/claude-code-statusline/main"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")"
+if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/cc-config.js" ]; then
+    cp "$SCRIPT_DIR/cc-config.js" "$CC_BIN_DIR/cc-config"
+else
+    curl -fsSL "$REPO_RAW/cc-config.js" -o "$CC_BIN_DIR/cc-config" \
+        || error "Failed to download cc-config.js from $REPO_RAW"
+fi
 chmod +x "$CC_BIN_DIR/cc-config"
 if ! echo "$PATH" | grep -q "$CC_BIN_DIR"; then
     warn "Add ~/.local/bin to your PATH: export PATH=\"\$HOME/.local/bin:\$PATH\""
