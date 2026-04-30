@@ -25,6 +25,28 @@ info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
+# Read user input from /dev/tty so it works under `curl | bash` (where stdin = script body).
+# Falls back to default if no TTY available.
+ask() {
+    local prompt="$1" default="$2" var
+    if [ -r /dev/tty ]; then
+        read -rp "$prompt" var </dev/tty || var=""
+    else
+        var=""
+        echo "$prompt(no TTY — using default: $default)"
+    fi
+    echo "${var:-$default}"
+}
+
+# Refuse to run as root: configs would land under /root, not the real user's $HOME.
+if [ "$(id -u)" -eq 0 ]; then
+    if [ -n "${SUDO_USER:-}" ]; then
+        error "Don't run with sudo. Re-run as ${SUDO_USER}: 'curl -fsSL <url> | bash' (no sudo). The script handles permissions itself."
+    else
+        error "Don't run as root. Re-run as your normal user: 'curl -fsSL <url> | bash'."
+    fi
+fi
+
 # --- Handle --change-font flag ---
 if [[ "${1:-}" == "--change-font" ]]; then
     select_and_apply_font() {
@@ -36,8 +58,7 @@ if [[ "${1:-}" == "--change-font" ]]; then
         echo "  4) Hack           — simple, high contrast"
         echo "  5) Iosevka        — tall, spacious, very readable"
         echo ""
-        read -rp "Enter choice [1-5] (default: 1): " FONT_CHOICE
-        FONT_CHOICE="${FONT_CHOICE:-1}"
+        FONT_CHOICE="$(ask "Enter choice [1-5] (default: 1): " "1")"
 
         case "$FONT_CHOICE" in
             1) FONT_ARCHIVE="JetBrainsMono"; FONT_FC_PATTERN="JetBrainsMono.*Nerd"; FONT_GSETTINGS="JetBrainsMono Nerd Font Mono 13" ;;
@@ -83,6 +104,13 @@ info "Checking prerequisites..."
 if command -v bun &>/dev/null; then
     PKG_MGR="bun"
     INSTALL_CMD="bun install -g ccstatusline@latest"
+    BUN_BIN="${BUN_INSTALL:-$HOME/.bun}/bin"
+    if [ -d "$BUN_BIN" ] && ! echo ":$PATH:" | grep -q ":$BUN_BIN:"; then
+        export PATH="$BUN_BIN:$PATH"
+        if ! grep -qs 'BUN_INSTALL_PATH' "$HOME/.bashrc" 2>/dev/null; then
+            printf '\n# BUN_INSTALL_PATH (added by ccstatusline setup)\nexport PATH="%s:$PATH"\n' "$BUN_BIN" >> "$HOME/.bashrc"
+        fi
+    fi
 elif command -v npm &>/dev/null; then
     PKG_MGR="npm"
     INSTALL_CMD="npm install -g ccstatusline@latest"
@@ -93,6 +121,25 @@ fi
 info "Using package manager: ${CYAN}${PKG_MGR}${NC}"
 
 # --- 2. Install ccstatusline globally ---
+# If running as non-root and npm prefix is unwritable, configure a user-local prefix
+# so we don't need sudo (avoids landing configs under /root).
+if [ "$PKG_MGR" = "npm" ] && [ "$(id -u)" -ne 0 ]; then
+    NPM_PREFIX="$(npm config get prefix 2>/dev/null || echo "")"
+    if [ -z "$NPM_PREFIX" ] || [ ! -w "$NPM_PREFIX/lib/node_modules" ] 2>/dev/null; then
+        if [ ! -w "${NPM_PREFIX:-/usr/local}" ] 2>/dev/null; then
+            USER_PREFIX="$HOME/.npm-global"
+            info "npm prefix not writable; switching to ${USER_PREFIX} (no sudo)."
+            mkdir -p "$USER_PREFIX"
+            npm config set prefix "$USER_PREFIX"
+            export PATH="$USER_PREFIX/bin:$PATH"
+            if ! grep -qs 'NPM_GLOBAL_PREFIX' "$HOME/.bashrc" 2>/dev/null; then
+                printf '\n# NPM_GLOBAL_PREFIX (added by ccstatusline setup)\nexport PATH="%s/bin:$PATH"\n' "$USER_PREFIX" >> "$HOME/.bashrc"
+            fi
+            warn "Added ${USER_PREFIX}/bin to PATH in ~/.bashrc — open a new shell after install."
+        fi
+    fi
+fi
+
 info "Installing ccstatusline globally..."
 $INSTALL_CMD 2>&1 | tail -3
 info "ccstatusline installed."
@@ -107,7 +154,12 @@ info "Installing cc-config command..."
 CC_BIN_DIR="$HOME/.local/bin"
 mkdir -p "$CC_BIN_DIR"
 REPO_RAW="https://raw.githubusercontent.com/dip497/claude-code-statusline/main"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")"
+SCRIPT_SRC="${BASH_SOURCE[0]:-${0:-}}"
+if [ -n "$SCRIPT_SRC" ] && [ -f "$SCRIPT_SRC" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SRC")" 2>/dev/null && pwd || echo "")"
+else
+    SCRIPT_DIR=""
+fi
 if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/cc-config.js" ]; then
     cp "$SCRIPT_DIR/cc-config.js" "$CC_BIN_DIR/cc-config"
 else
@@ -129,8 +181,7 @@ echo "  3) FiraCode       — clean with ligatures"
 echo "  4) Hack           — simple, high contrast"
 echo "  5) Iosevka        — tall, spacious, very readable"
 echo ""
-read -rp "Enter choice [1-5] (default: 1): " FONT_CHOICE
-FONT_CHOICE="${FONT_CHOICE:-1}"
+FONT_CHOICE="$(ask "Enter choice [1-5] (default: 1): " "1")"
 
 case "$FONT_CHOICE" in
     1) FONT_ARCHIVE="JetBrainsMono"
@@ -395,8 +446,9 @@ info "Updating Claude Code settings..."
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
 
 if [ -f "$CLAUDE_SETTINGS" ]; then
-    # Use python3 to safely merge statusLine into existing settings
-    python3 -c "
+    # Merge statusLine into existing settings. Prefer python3, fall back to jq.
+    if command -v python3 &>/dev/null; then
+        python3 -c "
 import json
 
 with open('$CLAUDE_SETTINGS') as f:
@@ -411,6 +463,23 @@ settings['statusLine'] = {
 with open('$CLAUDE_SETTINGS', 'w') as f:
     json.dump(settings, f, indent=2)
 "
+    elif command -v jq &>/dev/null; then
+        TMP_SETTINGS="$(mktemp)"
+        jq '.statusLine = {type:"command", command:"ccstatusline", padding:0}' "$CLAUDE_SETTINGS" > "$TMP_SETTINGS" \
+            && mv "$TMP_SETTINGS" "$CLAUDE_SETTINGS"
+    else
+        warn "Neither python3 nor jq found; backing up existing settings.json and overwriting."
+        cp "$CLAUDE_SETTINGS" "$CLAUDE_SETTINGS.bak.$(date +%s)"
+        cat > "$CLAUDE_SETTINGS" << 'CLEOF'
+{
+  "statusLine": {
+    "type": "command",
+    "command": "ccstatusline",
+    "padding": 0
+  }
+}
+CLEOF
+    fi
     info "Updated existing $CLAUDE_SETTINGS"
 else
     mkdir -p "$HOME/.claude"
