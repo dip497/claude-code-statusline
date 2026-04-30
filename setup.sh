@@ -8,9 +8,12 @@
 #   Line 2: Git Branch | Changes | Insertions | Deletions | Worktree | CWD | Git Root
 #   Line 3: Tokens In | Tokens Out | Cached | Context Length | Context % | Session Clock | Block Timer | Memory
 #
+# Supports: Linux, macOS, WSL, Git Bash on Windows.
+# Native Windows PowerShell users: run setup.ps1 instead.
+#
 # Usage:
-#   bash setup.sh               — full install
-#   bash setup.sh --change-font — change terminal font only
+#   bash setup.sh
+#   curl -fsSL <raw-url>/setup.sh | bash
 #
 
 set -euo pipefail
@@ -25,77 +28,35 @@ info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
-# Read user input from /dev/tty so it works under `curl | bash` (where stdin = script body).
-# Falls back to default if no TTY available.
-ask() {
-    local prompt="$1" default="$2" var
-    if [ -r /dev/tty ]; then
-        read -rp "$prompt" var </dev/tty || var=""
-    else
-        var=""
-        echo "$prompt(no TTY — using default: $default)"
-    fi
-    echo "${var:-$default}"
+# --- OS detection ---
+# OS_KIND ∈ { linux, macos, wsl, gitbash }
+detect_os() {
+    local uname_s
+    uname_s="$(uname -s 2>/dev/null || echo "")"
+    case "$uname_s" in
+        Darwin) OS_KIND="macos" ;;
+        Linux)
+            if grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then
+                OS_KIND="wsl"
+            else
+                OS_KIND="linux"
+            fi
+            ;;
+        MINGW*|MSYS*|CYGWIN*) OS_KIND="gitbash" ;;
+        *) OS_KIND="linux" ;;
+    esac
+    info "Detected OS: ${CYAN}${OS_KIND}${NC}"
 }
+detect_os
 
-# Refuse to run as root: configs would land under /root, not the real user's $HOME.
-if [ "$(id -u)" -eq 0 ]; then
+# Refuse to run as root on Unix: configs would land under /root, not the real user's $HOME.
+# Skip on Git Bash where `id -u` semantics differ.
+if [ "$OS_KIND" != "gitbash" ] && [ "$(id -u)" -eq 0 ]; then
     if [ -n "${SUDO_USER:-}" ]; then
         error "Don't run with sudo. Re-run as ${SUDO_USER}: 'curl -fsSL <url> | bash' (no sudo). The script handles permissions itself."
     else
-        error "Don't run as root. Re-run as your normal user: 'curl -fsSL <url> | bash'."
+        error "Don't run as root. Re-run as your normal user."
     fi
-fi
-
-# --- Handle --change-font flag ---
-if [[ "${1:-}" == "--change-font" ]]; then
-    select_and_apply_font() {
-        echo ""
-        echo -e "${CYAN}Select a Nerd Font:${NC}"
-        echo "  1) JetBrainsMono  — compact, sharp (default)"
-        echo "  2) CascadiaCode   — open, airy, easy on the eyes"
-        echo "  3) FiraCode       — clean with ligatures"
-        echo "  4) Hack           — simple, high contrast"
-        echo "  5) Iosevka        — tall, spacious, very readable"
-        echo ""
-        FONT_CHOICE="$(ask "Enter choice [1-5] (default: 1): " "1")"
-
-        case "$FONT_CHOICE" in
-            1) FONT_ARCHIVE="JetBrainsMono"; FONT_FC_PATTERN="JetBrainsMono.*Nerd"; FONT_GSETTINGS="JetBrainsMono Nerd Font Mono 13" ;;
-            2) FONT_ARCHIVE="CascadiaCode";  FONT_FC_PATTERN="CaskaydiaCove.*Nerd";  FONT_GSETTINGS="CaskaydiaCove Nerd Font Mono 13" ;;
-            3) FONT_ARCHIVE="FiraCode";      FONT_FC_PATTERN="FiraCode.*Nerd";       FONT_GSETTINGS="FiraCode Nerd Font Mono 13" ;;
-            4) FONT_ARCHIVE="Hack";          FONT_FC_PATTERN="Hack.*Nerd";           FONT_GSETTINGS="Hack Nerd Font Mono 13" ;;
-            5) FONT_ARCHIVE="Iosevka";       FONT_FC_PATTERN="Iosevka.*Nerd";        FONT_GSETTINGS="Iosevka Nerd Font Mono 13" ;;
-            *) warn "Invalid choice, defaulting to JetBrainsMono."
-               FONT_ARCHIVE="JetBrainsMono"; FONT_FC_PATTERN="JetBrainsMono.*Nerd"; FONT_GSETTINGS="JetBrainsMono Nerd Font Mono 13" ;;
-        esac
-
-        FONT_DIR="$HOME/.local/share/fonts"
-        if fc-list | grep -qi "$FONT_FC_PATTERN"; then
-            info "${FONT_ARCHIVE} Nerd Font already installed."
-        else
-            info "Installing ${FONT_ARCHIVE} Nerd Font..."
-            mkdir -p "$FONT_DIR"
-            TMP_DIR=$(mktemp -d)
-            curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/${FONT_ARCHIVE}.tar.xz" -o "$TMP_DIR/${FONT_ARCHIVE}.tar.xz"
-            tar -xf "$TMP_DIR/${FONT_ARCHIVE}.tar.xz" -C "$FONT_DIR"
-            rm -rf "$TMP_DIR"
-            fc-cache -f "$FONT_DIR"
-            info "${FONT_ARCHIVE} Nerd Font installed."
-        fi
-
-        if command -v gsettings &>/dev/null; then
-            CURRENT_FONT=$(gsettings get org.gnome.desktop.interface monospace-font-name 2>/dev/null || echo "")
-            gsettings set org.gnome.desktop.interface monospace-font-name "$FONT_GSETTINGS"
-            info "Font changed to: ${FONT_GSETTINGS}"
-            info "Previous font was: $CURRENT_FONT"
-            warn "To revert: gsettings set org.gnome.desktop.interface monospace-font-name $CURRENT_FONT"
-        else
-            warn "gsettings not found. Set your terminal font to '${FONT_GSETTINGS}' manually."
-        fi
-    }
-    select_and_apply_font
-    exit 0
 fi
 
 # --- 1. Check prerequisites ---
@@ -123,7 +84,7 @@ info "Using package manager: ${CYAN}${PKG_MGR}${NC}"
 # --- 2. Install ccstatusline globally ---
 # If running as non-root and npm prefix is unwritable, configure a user-local prefix
 # so we don't need sudo (avoids landing configs under /root).
-if [ "$PKG_MGR" = "npm" ] && [ "$(id -u)" -ne 0 ]; then
+if [ "$PKG_MGR" = "npm" ] && [ "$OS_KIND" != "gitbash" ] && [ "$(id -u)" -ne 0 ]; then
     NPM_PREFIX="$(npm config get prefix 2>/dev/null || echo "")"
     if [ -z "$NPM_PREFIX" ] || [ ! -w "$NPM_PREFIX/lib/node_modules" ] 2>/dev/null; then
         if [ ! -w "${NPM_PREFIX:-/usr/local}" ] 2>/dev/null; then
@@ -135,7 +96,11 @@ if [ "$PKG_MGR" = "npm" ] && [ "$(id -u)" -ne 0 ]; then
             if ! grep -qs 'NPM_GLOBAL_PREFIX' "$HOME/.bashrc" 2>/dev/null; then
                 printf '\n# NPM_GLOBAL_PREFIX (added by ccstatusline setup)\nexport PATH="%s/bin:$PATH"\n' "$USER_PREFIX" >> "$HOME/.bashrc"
             fi
-            warn "Added ${USER_PREFIX}/bin to PATH in ~/.bashrc — open a new shell after install."
+            # Also patch ~/.zshrc on macOS where zsh is default.
+            if [ "$OS_KIND" = "macos" ] && ! grep -qs 'NPM_GLOBAL_PREFIX' "$HOME/.zshrc" 2>/dev/null; then
+                printf '\n# NPM_GLOBAL_PREFIX (added by ccstatusline setup)\nexport PATH="%s/bin:$PATH"\n' "$USER_PREFIX" >> "$HOME/.zshrc"
+            fi
+            warn "Added ${USER_PREFIX}/bin to your shell rc — open a new shell after install."
         fi
     fi
 fi
@@ -149,7 +114,7 @@ if ! command -v ccstatusline &>/dev/null; then
     error "ccstatusline not found in PATH after install. Check your PATH."
 fi
 
-# --- Install cc-config command ---
+# --- 3. Install cc-config command ---
 info "Installing cc-config command..."
 CC_BIN_DIR="$HOME/.local/bin"
 mkdir -p "$CC_BIN_DIR"
@@ -167,65 +132,12 @@ else
         || error "Failed to download cc-config.js from $REPO_RAW"
 fi
 chmod +x "$CC_BIN_DIR/cc-config"
-if ! echo "$PATH" | grep -q "$CC_BIN_DIR"; then
+if ! echo ":$PATH:" | grep -q ":$CC_BIN_DIR:"; then
     warn "Add ~/.local/bin to your PATH: export PATH=\"\$HOME/.local/bin:\$PATH\""
 fi
 info "cc-config installed."
 
-# --- 3. Font selection ---
-echo ""
-echo -e "${CYAN}Select a Nerd Font to install (required for status line icons):${NC}"
-echo "  1) JetBrainsMono  — compact, sharp (default)"
-echo "  2) CascadiaCode   — open, airy, easy on the eyes"
-echo "  3) FiraCode       — clean with ligatures"
-echo "  4) Hack           — simple, high contrast"
-echo "  5) Iosevka        — tall, spacious, very readable"
-echo ""
-FONT_CHOICE="$(ask "Enter choice [1-5] (default: 1): " "1")"
-
-case "$FONT_CHOICE" in
-    1) FONT_ARCHIVE="JetBrainsMono"
-       FONT_FC_PATTERN="JetBrainsMono.*Nerd"
-       FONT_GSETTINGS="JetBrainsMono Nerd Font Mono 13" ;;
-    2) FONT_ARCHIVE="CascadiaCode"
-       FONT_FC_PATTERN="CaskaydiaCove.*Nerd"
-       FONT_GSETTINGS="CaskaydiaCove Nerd Font Mono 13" ;;
-    3) FONT_ARCHIVE="FiraCode"
-       FONT_FC_PATTERN="FiraCode.*Nerd"
-       FONT_GSETTINGS="FiraCode Nerd Font Mono 13" ;;
-    4) FONT_ARCHIVE="Hack"
-       FONT_FC_PATTERN="Hack.*Nerd"
-       FONT_GSETTINGS="Hack Nerd Font Mono 13" ;;
-    5) FONT_ARCHIVE="Iosevka"
-       FONT_FC_PATTERN="Iosevka.*Nerd"
-       FONT_GSETTINGS="Iosevka Nerd Font Mono 13" ;;
-    *) warn "Invalid choice, defaulting to JetBrainsMono."
-       FONT_ARCHIVE="JetBrainsMono"
-       FONT_FC_PATTERN="JetBrainsMono.*Nerd"
-       FONT_GSETTINGS="JetBrainsMono Nerd Font Mono 13" ;;
-esac
-
-FONT_DIR="$HOME/.local/share/fonts"
-if fc-list | grep -qi "$FONT_FC_PATTERN"; then
-    info "${FONT_ARCHIVE} Nerd Font already installed."
-else
-    info "Installing ${FONT_ARCHIVE} Nerd Font..."
-    mkdir -p "$FONT_DIR"
-    NERD_FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/${FONT_ARCHIVE}.tar.xz"
-    TMP_DIR=$(mktemp -d)
-    curl -fsSL "$NERD_FONT_URL" -o "$TMP_DIR/${FONT_ARCHIVE}.tar.xz"
-    tar -xf "$TMP_DIR/${FONT_ARCHIVE}.tar.xz" -C "$FONT_DIR"
-    rm -rf "$TMP_DIR"
-    fc-cache -f "$FONT_DIR"
-    info "${FONT_ARCHIVE} Nerd Font installed."
-fi
-
-# --- 4. Font install only — do NOT change system font ---
-info "Nerd Font installed. System monospace font left unchanged."
-warn "To use icons, set your terminal font manually to '${FONT_GSETTINGS}'."
-warn "Or run: gsettings set org.gnome.desktop.interface monospace-font-name '${FONT_GSETTINGS}'"
-
-# --- 5. Write ccstatusline config ---
+# --- 4. Write ccstatusline config ---
 info "Writing ccstatusline configuration..."
 CCSTATUS_DIR="$HOME/.config/ccstatusline"
 mkdir -p "$CCSTATUS_DIR"
@@ -441,25 +353,22 @@ CCEOF
 
 info "ccstatusline config written to $CCSTATUS_DIR/settings.json"
 
-# --- 6. Update Claude Code settings.json ---
+# --- 5. Update Claude Code settings.json ---
 info "Updating Claude Code settings..."
-CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+CLAUDE_SETTINGS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+mkdir -p "$(dirname "$CLAUDE_SETTINGS")"
 
 if [ -f "$CLAUDE_SETTINGS" ]; then
-    # Merge statusLine into existing settings. Prefer python3, fall back to jq.
     if command -v python3 &>/dev/null; then
         python3 -c "
 import json
-
 with open('$CLAUDE_SETTINGS') as f:
     settings = json.load(f)
-
 settings['statusLine'] = {
     'type': 'command',
     'command': 'ccstatusline',
     'padding': 0
 }
-
 with open('$CLAUDE_SETTINGS', 'w') as f:
     json.dump(settings, f, indent=2)
 "
@@ -482,7 +391,6 @@ CLEOF
     fi
     info "Updated existing $CLAUDE_SETTINGS"
 else
-    mkdir -p "$HOME/.claude"
     cat > "$CLAUDE_SETTINGS" << 'CLEOF'
 {
   "statusLine": {
@@ -506,7 +414,8 @@ echo -e "  ${CYAN}Line 2:${NC} Branch | Changes | +Lines | -Lines | Worktree | C
 echo -e "  ${CYAN}Line 3:${NC} In Tokens | Out | Cached | Context | Context% | Clock | Block | Mem"
 echo ""
 echo -e "  ${YELLOW}Restart Claude Code to see the new status line.${NC}"
+echo -e "  ${YELLOW}For icons, install a Nerd Font and set your terminal to it: https://www.nerdfonts.com/${NC}"
 echo -e "  ${YELLOW}To customize: run 'ccstatusline' interactively.${NC}"
-echo -e "  ${YELLOW}To configure:    cc-config${NC}"
+echo -e "  ${YELLOW}To configure: cc-config${NC}"
 echo -e "  ${YELLOW}Config: ~/.config/ccstatusline/settings.json${NC}"
 echo ""
