@@ -116,7 +116,7 @@ $ccConfig = @'
   }
 }
 '@
-Set-Content -Path $ccSettings -Value $ccConfig -Encoding UTF8
+[System.IO.File]::WriteAllText($ccSettings, $ccConfig, (New-Object System.Text.UTF8Encoding($false)))
 Write-Info "ccstatusline config written to $ccSettings"
 
 # --- 4. Update Claude Code settings.json ---
@@ -142,10 +142,12 @@ if (Test-Path $claudeSettings) {
     } else {
         $existing | Add-Member -NotePropertyName statusLine -NotePropertyValue $statusLine -Force
     }
-    $existing | ConvertTo-Json -Depth 32 | Set-Content -Path $claudeSettings -Encoding UTF8
+    $json = $existing | ConvertTo-Json -Depth 32
+    [System.IO.File]::WriteAllText($claudeSettings, $json, (New-Object System.Text.UTF8Encoding($false)))
     Write-Info "Updated existing $claudeSettings"
 } else {
-    @{ statusLine = $statusLine } | ConvertTo-Json -Depth 32 | Set-Content -Path $claudeSettings -Encoding UTF8
+    $json = @{ statusLine = $statusLine } | ConvertTo-Json -Depth 32
+    [System.IO.File]::WriteAllText($claudeSettings, $json, (New-Object System.Text.UTF8Encoding($false)))
     Write-Info "Created $claudeSettings"
 }
 
