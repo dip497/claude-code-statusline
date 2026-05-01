@@ -6,9 +6,17 @@ One-command setup for a beautiful 3-line status line in [Claude Code CLI](https:
 
 ## Quick Install
 
+**Linux / macOS / WSL / Git Bash:**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dip497/claude-code-statusline/main/setup.sh | bash
 ```
+
+**Windows (PowerShell 5.1+ / 7+):**
+```powershell
+irm https://raw.githubusercontent.com/dip497/claude-code-statusline/main/setup.ps1 | iex
+```
+
+The bash script auto-detects Linux, macOS, WSL, and Git Bash and routes accordingly. No `sudo` needed — it auto-switches to a user-local npm prefix if `/usr/local` isn't writable.
 
 ## What You Get
 
@@ -22,68 +30,49 @@ A fully configured 3-line status line with 15+ widgets:
 
 ## What the Script Does
 
-1. Installs `ccstatusline` globally (via `bun` or `npm`)
-2. Installs `cc-config` — a runtime config tool for fonts, colors, and lines
-3. Downloads & installs your chosen Nerd Font (if missing)
-4. Sets GNOME Terminal font automatically
-5. Writes the full 3-line config to `~/.config/ccstatusline/settings.json`
-6. Updates Claude Code `~/.claude/settings.json` with the status line command
+1. Detects your OS (Linux / macOS / WSL / Git Bash, or native Windows for `setup.ps1`)
+2. Installs `ccstatusline` (via `bun` or `npm`; on Windows uses `npx`/`bunx` directly — no global needed)
+3. Installs `cc-config` — runtime config tool (bash platforms only)
+4. Writes the full 3-line config to `~/.config/ccstatusline/settings.json`
+5. Updates Claude Code `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`) with the status line command
+
+> **Nerd Font**: not auto-installed. For the icon glyphs in the status line, install one yourself from <https://www.nerdfonts.com/> and set your terminal to use it.
 
 ## Requirements
 
 - **Claude Code CLI** installed
-- **bun** or **npm** (for installing ccstatusline)
-- **python3** (for safely updating settings.json)
-- **GNOME Terminal** (for auto font setup; other terminals need manual font change)
+- **bun** or **npm** (Linux/macOS/WSL); **Node.js** or **Bun** (Windows)
+- **python3** or **jq** (optional — for safely merging settings.json; otherwise the script backs up and overwrites)
 
 ## Runtime Configuration
 
-After install, use `cc-config` to change fonts or configure the status line:
+After install, use `cc-config` (Linux/macOS/WSL/Git Bash) or `ccstatusline` directly to tweak the status line:
 
 ```bash
-cc-config
+cc-config         # menu wrapper
+ccstatusline      # interactive TUI
 ```
 
-```
-  Claude Code Status Line — Config
+On Windows native:
 
-  1) Change Font
-  2) Edit Colors & Lines
-```
-
-- **Change Font** — pick from 5 Nerd Fonts, applied immediately without restarting the terminal
-- **Edit Colors & Lines** — opens the full ccstatusline interactive TUI to tweak widgets, colors, and layout
-
-### Available Fonts
-
-| #   | Font          | Style                         |
-| --- | ------------- | ----------------------------- |
-| 1   | JetBrainsMono | Compact, sharp (default)      |
-| 2   | CascadiaCode  | Open, airy, easy on the eyes  |
-| 3   | FiraCode      | Clean with ligatures          |
-| 4   | Hack          | Simple, high contrast         |
-| 5   | Iosevka       | Tall, spacious, very readable |
-
-## Revert Terminal Font
-
-```bash
-gsettings set org.gnome.desktop.interface monospace-font-name 'Ubuntu Sans Mono 13'
+```powershell
+npx -y ccstatusline@latest    # or: bunx -y ccstatusline@latest
 ```
 
 ## Uninstall
 
+**Linux / macOS / WSL / Git Bash:**
 ```bash
-# Remove ccstatusline
-npm uninstall -g ccstatusline  # or: bun remove -g ccstatusline
-
-# Remove cc-config
+npm uninstall -g ccstatusline   # or: bun remove -g ccstatusline
 rm ~/.local/bin/cc-config
-
-# Remove config
 rm -rf ~/.config/ccstatusline
+# Then delete the "statusLine" block from ~/.claude/settings.json
+```
 
-# Remove statusLine from Claude Code settings
-# ~/.claude/settings.json -> delete the "statusLine" block
+**Windows:**
+```powershell
+Remove-Item -Recurse -Force "$HOME\.config\ccstatusline"
+# Then delete the "statusLine" block from $HOME\.claude\settings.json
 ```
 
 ## Credits
